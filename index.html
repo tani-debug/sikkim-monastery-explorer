@@ -46,17 +46,6 @@
     <button id="routeBtn">Draw Route</button>
     <button id="clearRouteBtn">Clear Route</button>
     <button id="playSelectedAudioBtn">🔊 Play Selected Audio</button>
-    <audio id="audio-player" src="audio/rumtek_monastery.mp3"></audio>
-    <audio id="audio-player" src="audio/Rumtek_Monastery_cafe.mp3"></audio>
-    <audio id="audio-player" src="audio/ralang_hot_spring.mp3"></audio>
-    <audio id="audio-player" src="audio/ralang_temple_fair.mp3"></audio>
-    <audio id="audio-player" src="audio/pemayangtse_khecheopalri_lake.mp3"></audio>
-    <audio id="audio-player" src="audio/pemayangtse_skywalk.mp3"></audio>
-    <audio id="audio-player" src="audio/enchey_flower_exhibition.mp3"></audio>
-    <audio id="audio-player" src="audio/enchey_handicraft_center.mp3"></audio>
-    <audio id="audio-player" src="audio/dubdi_nearby_chorten.mp3"></audio>
-    <audio id="audio-player" src="audio/dubdi_yuksom_trek_start.mp3"></audio>
-
 
     <div class="small">Tip: type part of a monastery name in the Start/End input — the dropdown below will filter to matching monasteries.</div>
     <div class="small">Run locally with: <code>python -m http.server</code></div>
@@ -71,15 +60,13 @@
   (function () {
       const msgEl = document.getElementById('msg');
 
-      // If Leaflet failed to load (network/script blocked), avoid throwing 'Script error' by early return with a helpful message.
       if (typeof L === 'undefined') {
           document.getElementById('controls').innerHTML = '<div class="error">Error: Leaflet failed to load.<br/>Please check your internet connection or run this file locally with network access.</div>';
-          console.error('Leaflet is not defined. External scripts may have failed to load.');
+          console.error('Leaflet is not defined.');
           return;
       }
 
-      // ---------------- SIKKIM MONASTERIES (approx. 15) ----------------
-      // Coordinates are [lon, lat]. Added 'filename' property for robust audio mapping.
+      // ---------------- SIKKIM MONASTERIES ----------------
       const monasteries = {
           type: 'FeatureCollection',
           features: [
@@ -105,7 +92,6 @@
       const map = L.map('map').setView([27.33, 88.61], 10);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
-      // marker group (cluster if available)
       const markers = (typeof L.markerClusterGroup === 'function') ? L.markerClusterGroup() : L.layerGroup();
 
       const startSelect = document.getElementById('startSelect');
@@ -114,13 +100,9 @@
       const startInput = document.getElementById('startInput');
       const endInput = document.getElementById('endInput');
 
-      // add monastery markers and populate selects/datalist
       monasteries.features.forEach((f, idx) => {
           const [lon, lat] = f.geometry.coordinates;
           const p = f.properties;
-
-          // Use the index as the primary audio parameter
-          const audioParam = `${idx}`;
 
           const popup = `
               <div style="width:230px">
@@ -128,37 +110,27 @@
                   <small>${p.region}</small>
                   <img src="${p.img || 'https://source.unsplash.com/400x300/?monastery'}" style="width:100%;margin-top:6px;border-radius:6px"/>
                   <p style="font-size:13px;margin:6px 0">${p.desc}</p>
-                  <button onclick="window._playAudio(${audioParam})">🔊 Play Audio</button>
+                  <button onclick="window._playAudio(${idx})">🔊 Play Audio</button>
                   <button onclick="window._fetchNearby && window._fetchNearby(${lat},${lon},'${p.name.replace(/'/g,"\\'")}')">Nearby Attractions</button>
               </div>`;
 
           const m = L.marker([lat, lon]).bindPopup(popup);
-            
-          // --- FIX: REMOVE automatic audio playback on marker click (popupopen) ---
-          m.on('popupopen', () => {
-               // No automatic audio play here. User must click the button.
-          });
-          // -----------------------------------------------------------------------
-
           markers.addLayer(m);
 
-          // select options (value is index)
           const opt1 = new Option(p.name, idx);
           const opt2 = new Option(p.name, idx);
           startSelect.appendChild(opt1);
           endSelect.appendChild(opt2);
 
-          // datalist
           const o = document.createElement('option');
           o.value = p.name;
           monasteriesList.appendChild(o);
       });
 
       map.addLayer(markers);
-      try { map.fitBounds(markers.getBounds().pad(0.2)); } catch(e) { /* single marker or error */ }
+      try { map.fitBounds(markers.getBounds().pad(0.2)); } catch(e) {}
 
       // ---------------- Helpers ----------------
-      // Populate a select with monasteries filtered by text. includeMyLocation (boolean) adds a top 'My Location' option.
       function populateSelectFiltered(selectEl, filterText, includeMyLocation) {
           const q = (filterText || '').toLowerCase();
           selectEl.innerHTML = '';
@@ -181,11 +153,9 @@
           });
       }
 
-      // initial populate
       populateSelectFiltered(startSelect, '', true);
       populateSelectFiltered(endSelect, '', false);
 
-      // when user types in inputs, filter the corresponding select
       startInput.addEventListener('input', e => {
           populateSelectFiltered(startSelect, e.target.value, true);
       });
@@ -193,7 +163,6 @@
           populateSelectFiltered(endSelect, e.target.value, false);
       });
 
-      // when select changes, reflect selection into input
       startSelect.addEventListener('change', e => {
           const v = e.target.value;
           if (v === 'my_location') startInput.value = 'My Location';
@@ -206,7 +175,6 @@
           else endInput.value = monasteries.features[parseInt(v)].properties.name;
       });
 
-      // Geolocation helper
       function getCurrentLocation() {
           return new Promise((resolve, reject) => {
               if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
@@ -214,26 +182,21 @@
           });
       }
 
-      // Geocode: handle 'My Location', selected monastery (dropdown index), exact monastery name, or fallback to Nominatim
       async function geocode(query, dropdownValue) {
-          // dropdownValue may be 'my_location', '', or an index string
           if (dropdownValue === 'my_location') return await getCurrentLocation();
           if (typeof dropdownValue === 'string' && dropdownValue !== '' && !isNaN(parseInt(dropdownValue))) {
-              const feat = monasteries.features[parseInt(dropdownValue)];
-              return feat.geometry.coordinates; // [lon, lat]
+              return monasteries.features[parseInt(dropdownValue)].geometry.coordinates;
           }
 
           if (query && query.trim().toLowerCase() === 'my location') {
               return await getCurrentLocation();
           }
 
-          // exact monastery name match
           if (query) {
               const q = query.trim().toLowerCase();
               const found = monasteries.features.find(f => (f.properties.name || '').toLowerCase() === q);
               if (found) return found.geometry.coordinates;
 
-              // fallback to Nominatim
               try {
                   msgEl.textContent = 'Geocoding...';
                   const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
@@ -263,7 +226,6 @@
 
               if (!s || !e) throw new Error('Could not determine coordinates');
 
-              // remove previous
               if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
 
               const url = `https://router.project-osrm.org/route/v1/driving/${s[0]},${s[1]};${e[0]},${e[1]}?overview=full&geometries=geojson`;
@@ -289,25 +251,19 @@
           const startDropdown = startSelect.value || '';
           const endDropdown = endSelect.value || '';
 
-          // require either text or dropdown selection for both
           if ((startQ.trim() === '' && startDropdown === '') || (endQ.trim() === '' && endDropdown === '')) {
               alert('Please enter or select both start and end');
               return;
           }
 
-          try {
-              await drawRoute(startQ, startDropdown, endQ, endDropdown);
-          } catch (err) {
-              // error handled in drawRoute
-          }
+          try { await drawRoute(startQ, startDropdown, endQ, endDropdown); } catch(e){}
       });
 
       document.getElementById('clearRouteBtn').addEventListener('click', () => {
           if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
       });
 
-      // ---------------- Nearby Attractions (exposed for popup buttons) ----------------
-      // expose a global wrapper so popup's onclick can call it (safer than inline JS on some setups)
+      // ---------------- Nearby Attractions ----------------
       window._fetchNearby = async function (lat, lon, name) {
           try {
               msgEl.textContent = 'Searching nearby attractions...';
@@ -334,15 +290,9 @@
       };
 
       // ---------------- Audio Playback ----------------
-      /**
-       * Plays the audio file for a given monastery index.
-       *
-       * @param {string|number} input Monastery index string from select dropdowns or marker buttons.
-       */
-      window._playAudio = function(input) {
-          let monasteryName = '';
-          let fileName = '';
+      window._audioPlayer = new Audio();
 
+      window._playAudio = function(input) {
           const idx = parseInt(input);
 
           if (isNaN(idx) || idx < 0 || idx >= monasteries.features.length) {
@@ -353,38 +303,29 @@
           }
 
           const p = monasteries.features[idx].properties;
-          monasteryName = p.name;
-
-          // Use the dedicated filename property
-          fileName = p.filename || monasteryName.toLowerCase().replace(/[^a-z0-9]+/g,'_');
-
+          const fileName = p.filename || p.name.toLowerCase().replace(/[^a-z0-9]+/g,'_');
           const audioPath = `audio/${fileName}.mp3`;
-          const audio = new Audio(audioPath);
 
-          // Display an alert that audio is attempting to play
-          alert(`Playing audio for: ${monasteryName}`); 
-
-          audio.play().catch(err => {
+          _audioPlayer.src = audioPath;
+          _audioPlayer.play().then(() => {
+              msgEl.textContent = `Playing audio for: ${p.name}`;
+              setTimeout(() => { msgEl.textContent = ''; }, 3000);
+          }).catch(err => {
               console.error('Audio playback failed:', err);
-              msgEl.innerHTML = `<span class="error">Audio Error:</span> File **${audioPath}** not found for **${monasteryName}**. Check your 'audio' folder and file names.`;
+              msgEl.innerHTML = `<span class="error">Audio Error:</span> File ${audioPath} not found for ${p.name}. Check your 'audio' folder and file names.`;
               setTimeout(() => { if (msgEl.innerHTML.includes('Audio Error:')) msgEl.textContent = ''; }, 6000);
           });
       };
+
+      document.getElementById('playSelectedAudioBtn').addEventListener('click', () => {
+          const selectedValue = document.getElementById('startSelect').value || document.getElementById('endSelect').value; 
+          if (selectedValue === '' || selectedValue === 'my_location') {
+              alert('Please select a monastery first from the Start or End dropdown.');
+              return;
+          }
+          window._playAudio(selectedValue); 
+      });
   })();
-
-  //playaudio button in controls panel
-  document.getElementById('playSelectedAudioBtn').addEventListener('click', () => {
-      // Prefer startSelect, fall back to endSelect
-      const selectedValue = document.getElementById('startSelect').value || document.getElementById('endSelect').value; 
-
-      if (selectedValue === '' || selectedValue === 'my_location') {
-          alert('Please select a monastery first from the Start or End dropdown.');
-          return;
-      }
-
-      // The selected value is the index of the monastery in the array (e.g., "6")
-      window._playAudio(selectedValue); 
-  });
 </script>
 </body>
 </html>
