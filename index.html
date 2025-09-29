@@ -56,293 +56,324 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <script>
+<script>
   (function () {
-    const msgEl = document.getElementById('msg');
+      const msgEl = document.getElementById('msg');
 
-    // If Leaflet failed to load (network/script blocked), avoid throwing 'Script error' by early return with a helpful message.
-    if (typeof L === 'undefined') {
-      document.getElementById('controls').innerHTML = '<div class="error">Error: Leaflet failed to load.<br/>Please check your internet connection or run this file locally with network access.</div>';
-      console.error('Leaflet is not defined. External scripts may have failed to load.');
-      return;
-    }
-
-    // ---------------- SIKKIM MONASTERIES (approx. 15) ----------------
-    // Coordinates are [lon, lat]
-    const monasteries = {
-      type: 'FeatureCollection',
-      features: [
-        { type:'Feature', properties:{name:'Rumtek Monastery', region:'Sikkim', desc:'Seat of the Karmapa'}, geometry:{type:'Point', coordinates:[88.606,27.325]} },
-        { type:'Feature', properties:{name:'Pemayangtse Monastery', region:'West Sikkim', desc:'Historic monastery near Pelling'}, geometry:{type:'Point', coordinates:[88.262,27.299]} },
-        { type:'Feature', properties:{name:'Tashiding Monastery', region:'West Sikkim', desc:'Holy monastery known for Bumchu'}, geometry:{type:'Point', coordinates:[88.262,27.225]} },
-        { type:'Feature', properties:{name:'Enchey Monastery', region:'Gangtok', desc:'Nyingma monastery near Gangtok'}, geometry:{type:'Point', coordinates:[88.613,27.342]} },
-        { type:'Feature', properties:{name:'Phodong Monastery', region:'North Sikkim', desc:'Famous for Cham dances'}, geometry:{type:'Point', coordinates:[88.612,27.415]} },
-        { type:'Feature', properties:{name:'Ralang Monastery', region:'South Sikkim', desc:'Important sacred monastery'}, geometry:{type:'Point', coordinates:[88.359,27.220]} },
-        { type:'Feature', properties:{name:'Dubdi Monastery', region:'Yuksom', desc:'First monastery in Sikkim'}, geometry:{type:'Point', coordinates:[88.253,27.372]} },
-        { type:'Feature', properties:{name:'Lingdum (Ranka) Monastery', region:'Near Gangtok', desc:'Modern monastery also called Ranka'}, geometry:{type:'Point', coordinates:[88.704,27.325]} },
-        { type:'Feature', properties:{name:'Phensang Monastery', region:'Near Gangtok', desc:'Hosts dances before Losoong'}, geometry:{type:'Point', coordinates:[88.616,27.396]} },
-        { type:'Feature', properties:{name:'Kartok Monastery', region:'Yuksom', desc:'Nyingma monastery near Kathok Lake'}, geometry:{type:'Point', coordinates:[88.258,27.381]} },
-        { type:'Feature', properties:{name:'Sanga Choeling Monastery', region:'Pelling area', desc:'One of the oldest in Sikkim'}, geometry:{type:'Point', coordinates:[88.241,27.310]} },
-        { type:'Feature', properties:{name:'Zang Dhok Palri Phodang (Durpin)', region:'Gangtok', desc:'Houses many rare scriptures'}, geometry:{type:'Point', coordinates:[88.614,27.313]} },
-        { type:'Feature', properties:{name:'Samdruptse (Namchi) Monastery', region:'Namchi', desc:'Famous for the giant Guru statue'}, geometry:{type:'Point', coordinates:[88.349,27.173]} },
-        { type:'Feature', properties:{name:'Tholung Monastery', region:'North Sikkim', desc:'Houses ancient relics; accessible by trek'}, geometry:{type:'Point', coordinates:[88.530,27.800]} },
-        { type:'Feature', properties:{name:'Khecheopalri Monastery', region:'West Sikkim', desc:'Near sacred Khecheopalri Lake'}, geometry:{type:'Point', coordinates:[88.195,27.360]} }
-      ]
-    };
-
-    // ---------------- Map Setup ----------------
-    const map = L.map('map').setView([27.33, 88.61], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
-
-    // marker group (cluster if available)
-    const markers = (typeof L.markerClusterGroup === 'function') ? L.markerClusterGroup() : L.layerGroup();
-
-    const startSelect = document.getElementById('startSelect');
-    const endSelect = document.getElementById('endSelect');
-    const monasteriesList = document.getElementById('monasteriesList');
-    const startInput = document.getElementById('startInput');
-    const endInput = document.getElementById('endInput');
-
-    // add monastery markers and populate selects/datalist
-    monasteries.features.forEach((f, idx) => {
-      const [lon, lat] = f.geometry.coordinates;
-      const p = f.properties;
-      const popup = `
-        <div style="width:230px">
-          <strong>${p.name}</strong><br>
-          <small>${p.region}</small>
-          <img src="${p.img || 'https://source.unsplash.com/400x300/?monastery'}" style="width:100%;margin-top:6px;border-radius:6px"/>
-          <p style="font-size:13px;margin:6px 0">${p.desc}</p>
-          <button onclick="window._playAudio && window._playAudio('${p.name.replace(/'/g,"\\'")}')">🔊 Play Audio</button>
-          <button onclick="window._fetchNearby && window._fetchNearby(${lat},${lon},'${p.name.replace(/'/g,"\\'")}')">Nearby Attractions</button>
-        </div>`;
-
-      const m = L.marker([lat, lon]).bindPopup(popup);
-      m.on('popupopen', () => {
-        // play audio automatically
-        window._playAudio(p.name);
-      });
-
-      markers.addLayer(m);
-
-      // select options (value is index)
-      const opt1 = new Option(p.name, idx);
-      const opt2 = new Option(p.name, idx);
-      startSelect.appendChild(opt1);
-      endSelect.appendChild(opt2);
-
-      // datalist
-      const o = document.createElement('option');
-      o.value = p.name;
-      monasteriesList.appendChild(o);
-    });
-
-    map.addLayer(markers);
-    try { map.fitBounds(markers.getBounds().pad(0.2)); } catch(e) { /* single marker or error */ }
-
-    // ---------------- Helpers ----------------
-    // Populate a select with monasteries filtered by text. includeMyLocation (boolean) adds a top 'My Location' option.
-    function populateSelectFiltered(selectEl, filterText, includeMyLocation) {
-      const q = (filterText || '').toLowerCase();
-      selectEl.innerHTML = '';
-      const placeholder = new Option('-- choose monastery --', '');
-      placeholder.disabled = true;
-      placeholder.selected = true;
-      selectEl.appendChild(placeholder);
-
-      if (includeMyLocation) {
-        const myOpt = new Option('My Location', 'my_location');
-        selectEl.appendChild(myOpt);
+      // If Leaflet failed to load (network/script blocked), avoid throwing 'Script error' by early return with a helpful message.
+      if (typeof L === 'undefined') {
+          document.getElementById('controls').innerHTML = '<div class="error">Error: Leaflet failed to load.<br/>Please check your internet connection or run this file locally with network access.</div>';
+          console.error('Leaflet is not defined. External scripts may have failed to load.');
+          return;
       }
 
+      // ---------------- SIKKIM MONASTERIES (approx. 15) ----------------
+      // Coordinates are [lon, lat]. Added 'filename' property for robust audio mapping.
+      const monasteries = {
+          type: 'FeatureCollection',
+          features: [
+              { type:'Feature', properties:{name:'Rumtek Monastery', region:'Sikkim', desc:'Seat of the Karmapa', filename:'rumtek_monastery'}, geometry:{type:'Point', coordinates:[88.606,27.325]} },
+              { type:'Feature', properties:{name:'Pemayangtse Monastery', region:'West Sikkim', desc:'Historic monastery near Pelling', filename:'pemayangtse_monastery'}, geometry:{type:'Point', coordinates:[88.262,27.299]} },
+              { type:'Feature', properties:{name:'Tashiding Monastery', region:'West Sikkim', desc:'Holy monastery known for Bumchu', filename:'tashiding_monastery'}, geometry:{type:'Point', coordinates:[88.262,27.225]} },
+              { type:'Feature', properties:{name:'Enchey Monastery', region:'Gangtok', desc:'Nyingma monastery near Gangtok', filename:'enchey_monastery'}, geometry:{type:'Point', coordinates:[88.613,27.342]} },
+              { type:'Feature', properties:{name:'Phodong Monastery', region:'North Sikkim', desc:'Famous for Cham dances', filename:'phodong_monastery'}, geometry:{type:'Point', coordinates:[88.612,27.415]} },
+              { type:'Feature', properties:{name:'Ralang Monastery', region:'South Sikkim', desc:'Important sacred monastery', filename:'ralang_monastery'}, geometry:{type:'Point', coordinates:[88.359,27.220]} },
+              { type:'Feature', properties:{name:'Dubdi Monastery', region:'Yuksom', desc:'First monastery in Sikkim', filename:'dubdi_yuksom_trek_start'}, geometry:{type:'Point', coordinates:[88.253,27.372]} },
+              { type:'Feature', properties:{name:'Lingdum (Ranka) Monastery', region:'Near Gangtok', desc:'Modern monastery also called Ranka', filename:'lingdum_ranka_monastery'}, geometry:{type:'Point', coordinates:[88.704,27.325]} },
+              { type:'Feature', properties:{name:'Phensang Monastery', region:'Near Gangtok', desc:'Hosts dances before Losoong', filename:'phensang_monastery'}, geometry:{type:'Point', coordinates:[88.616,27.396]} },
+              { type:'Feature', properties:{name:'Kartok Monastery', region:'Yuksom', desc:'Nyingma monastery near Kathok Lake', filename:'kartok_monastery'}, geometry:{type:'Point', coordinates:[88.258,27.381]} },
+              { type:'Feature', properties:{name:'Sanga Choeling Monastery', region:'Pelling area', desc:'One of the oldest in Sikkim', filename:'sanga_choeling_monastery'}, geometry:{type:'Point', coordinates:[88.241,27.310]} },
+              { type:'Feature', properties:{name:'Zang Dhok Palri Phodang (Durpin)', region:'Gangtok', desc:'Houses many rare scriptures', filename:'zang_dhok_palri_phodang'}, geometry:{type:'Point', coordinates:[88.614,27.313]} },
+              { type:'Feature', properties:{name:'Samdruptse (Namchi) Monastery', region:'Namchi', desc:'Famous for the giant Guru statue', filename:'samdruptse_namchi_monastery'}, geometry:{type:'Point', coordinates:[88.349,27.173]} },
+              { type:'Feature', properties:{name:'Tholung Monastery', region:'North Sikkim', desc:'Houses ancient relics; accessible by trek', filename:'tholung_monastery'}, geometry:{type:'Point', coordinates:[88.530,27.800]} },
+              { type:'Feature', properties:{name:'Khecheopalri Monastery', region:'West Sikkim', desc:'Near sacred Khecheopalri Lake', filename:'khecheopalri_monastery'}, geometry:{type:'Point', coordinates:[88.195,27.360]} }
+          ]
+      };
+
+      // ---------------- Map Setup ----------------
+      const map = L.map('map').setView([27.33, 88.61], 10);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+      // marker group (cluster if available)
+      const markers = (typeof L.markerClusterGroup === 'function') ? L.markerClusterGroup() : L.layerGroup();
+
+      const startSelect = document.getElementById('startSelect');
+      const endSelect = document.getElementById('endSelect');
+      const monasteriesList = document.getElementById('monasteriesList');
+      const startInput = document.getElementById('startInput');
+      const endInput = document.getElementById('endInput');
+
+      // add monastery markers and populate selects/datalist
       monasteries.features.forEach((f, idx) => {
-        const name = f.properties.name || '';
-        if (!q || name.toLowerCase().includes(q)) {
-          const opt = new Option(name, idx);
-          selectEl.appendChild(opt);
-        }
+          const [lon, lat] = f.geometry.coordinates;
+          const p = f.properties;
+
+          // Use the index as the primary audio parameter
+          const audioParam = `${idx}`;
+
+          const popup = `
+              <div style="width:230px">
+                  <strong>${p.name}</strong><br>
+                  <small>${p.region}</small>
+                  <img src="${p.img || 'https://source.unsplash.com/400x300/?monastery'}" style="width:100%;margin-top:6px;border-radius:6px"/>
+                  <p style="font-size:13px;margin:6px 0">${p.desc}</p>
+                  <button onclick="window._playAudio(${audioParam})">🔊 Play Audio</button>
+                  <button onclick="window._fetchNearby && window._fetchNearby(${lat},${lon},'${p.name.replace(/'/g,"\\'")}')">Nearby Attractions</button>
+              </div>`;
+
+          const m = L.marker([lat, lon]).bindPopup(popup);
+            
+          // --- FIX: REMOVE automatic audio playback on marker click (popupopen) ---
+          m.on('popupopen', () => {
+               // No automatic audio play here. User must click the button.
+          });
+          // -----------------------------------------------------------------------
+
+          markers.addLayer(m);
+
+          // select options (value is index)
+          const opt1 = new Option(p.name, idx);
+          const opt2 = new Option(p.name, idx);
+          startSelect.appendChild(opt1);
+          endSelect.appendChild(opt2);
+
+          // datalist
+          const o = document.createElement('option');
+          o.value = p.name;
+          monasteriesList.appendChild(o);
       });
-    }
 
-    // initial populate
-    populateSelectFiltered(startSelect, '', true);
-    populateSelectFiltered(endSelect, '', false);
+      map.addLayer(markers);
+      try { map.fitBounds(markers.getBounds().pad(0.2)); } catch(e) { /* single marker or error */ }
 
-    // when user types in inputs, filter the corresponding select
-    startInput.addEventListener('input', e => {
-      populateSelectFiltered(startSelect, e.target.value, true);
-    });
-    endInput.addEventListener('input', e => {
-      populateSelectFiltered(endSelect, e.target.value, false);
-    });
+      // ---------------- Helpers ----------------
+      // Populate a select with monasteries filtered by text. includeMyLocation (boolean) adds a top 'My Location' option.
+      function populateSelectFiltered(selectEl, filterText, includeMyLocation) {
+          const q = (filterText || '').toLowerCase();
+          selectEl.innerHTML = '';
+          const placeholder = new Option('-- choose monastery --', '');
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          selectEl.appendChild(placeholder);
 
-    // when select changes, reflect selection into input
-    startSelect.addEventListener('change', e => {
-      const v = e.target.value;
-      if (v === 'my_location') startInput.value = 'My Location';
-      else if (v === '') startInput.value = '';
-      else startInput.value = monasteries.features[parseInt(v)].properties.name;
-    });
-    endSelect.addEventListener('change', e => {
-      const v = e.target.value;
-      if (v === '') endInput.value = '';
-      else endInput.value = monasteries.features[parseInt(v)].properties.name;
-    });
+          if (includeMyLocation) {
+              const myOpt = new Option('My Location', 'my_location');
+              selectEl.appendChild(myOpt);
+          }
 
-    // Geolocation helper
-    function getCurrentLocation() {
-      return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
-        navigator.geolocation.getCurrentPosition(pos => resolve([pos.coords.longitude, pos.coords.latitude]), err => reject(err), { enableHighAccuracy: true });
+          monasteries.features.forEach((f, idx) => {
+              const name = f.properties.name || '';
+              if (!q || name.toLowerCase().includes(q)) {
+                  const opt = new Option(name, idx);
+                  selectEl.appendChild(opt);
+              }
+          });
+      }
+
+      // initial populate
+      populateSelectFiltered(startSelect, '', true);
+      populateSelectFiltered(endSelect, '', false);
+
+      // when user types in inputs, filter the corresponding select
+      startInput.addEventListener('input', e => {
+          populateSelectFiltered(startSelect, e.target.value, true);
       });
-    }
+      endInput.addEventListener('input', e => {
+          populateSelectFiltered(endSelect, e.target.value, false);
+      });
 
-    // Geocode: handle 'My Location', selected monastery (dropdown index), exact monastery name, or fallback to Nominatim
-    async function geocode(query, dropdownValue) {
-      // dropdownValue may be 'my_location', '', or an index string
-      if (dropdownValue === 'my_location') return await getCurrentLocation();
-      if (typeof dropdownValue === 'string' && dropdownValue !== '' && !isNaN(parseInt(dropdownValue))) {
-        const feat = monasteries.features[parseInt(dropdownValue)];
-        return feat.geometry.coordinates; // [lon, lat]
+      // when select changes, reflect selection into input
+      startSelect.addEventListener('change', e => {
+          const v = e.target.value;
+          if (v === 'my_location') startInput.value = 'My Location';
+          else if (v === '') startInput.value = '';
+          else startInput.value = monasteries.features[parseInt(v)].properties.name;
+      });
+      endSelect.addEventListener('change', e => {
+          const v = e.target.value;
+          if (v === '') endInput.value = '';
+          else endInput.value = monasteries.features[parseInt(v)].properties.name;
+      });
+
+      // Geolocation helper
+      function getCurrentLocation() {
+          return new Promise((resolve, reject) => {
+              if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
+              navigator.geolocation.getCurrentPosition(pos => resolve([pos.coords.longitude, pos.coords.latitude]), err => reject(err), { enableHighAccuracy: true });
+          });
       }
 
-      if (query && query.trim().toLowerCase() === 'my location') {
-        return await getCurrentLocation();
+      // Geocode: handle 'My Location', selected monastery (dropdown index), exact monastery name, or fallback to Nominatim
+      async function geocode(query, dropdownValue) {
+          // dropdownValue may be 'my_location', '', or an index string
+          if (dropdownValue === 'my_location') return await getCurrentLocation();
+          if (typeof dropdownValue === 'string' && dropdownValue !== '' && !isNaN(parseInt(dropdownValue))) {
+              const feat = monasteries.features[parseInt(dropdownValue)];
+              return feat.geometry.coordinates; // [lon, lat]
+          }
+
+          if (query && query.trim().toLowerCase() === 'my location') {
+              return await getCurrentLocation();
+          }
+
+          // exact monastery name match
+          if (query) {
+              const q = query.trim().toLowerCase();
+              const found = monasteries.features.find(f => (f.properties.name || '').toLowerCase() === q);
+              if (found) return found.geometry.coordinates;
+
+              // fallback to Nominatim
+              try {
+                  msgEl.textContent = 'Geocoding...';
+                  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
+                  const res = await fetch(url, {headers: {'Accept': 'application/json'}});
+                  if (!res.ok) throw new Error('Geocoding request failed');
+                  const json = await res.json();
+                  msgEl.textContent = '';
+                  if (json && json.length) return [parseFloat(json[0].lon), parseFloat(json[0].lat)];
+                  throw new Error('No results from geocoder');
+              } catch (err) {
+                  msgEl.textContent = '';
+                  throw err;
+              }
+          }
+
+          throw new Error('No input provided');
       }
 
-      // exact monastery name match
-      if (query) {
-        const q = query.trim().toLowerCase();
-        const found = monasteries.features.find(f => (f.properties.name || '').toLowerCase() === q);
-        if (found) return found.geometry.coordinates;
+      // ---------------- Routing ----------------
+      let routeLayer = null;
 
-        // fallback to Nominatim
-        try {
-          msgEl.textContent = 'Geocoding...';
-          const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
-          const res = await fetch(url, {headers: {'Accept': 'application/json'}});
-          if (!res.ok) throw new Error('Geocoding request failed');
-          const json = await res.json();
-          msgEl.textContent = '';
-          if (json && json.length) return [parseFloat(json[0].lon), parseFloat(json[0].lat)];
-          throw new Error('No results from geocoder');
-        } catch (err) {
-          msgEl.textContent = '';
-          throw err;
-        }
+      async function drawRoute(startQ, startDropdown, endQ, endDropdown) {
+          try {
+              msgEl.textContent = 'Calculating route...';
+              const s = await geocode(startQ, startDropdown);
+              const e = await geocode(endQ, endDropdown);
+
+              if (!s || !e) throw new Error('Could not determine coordinates');
+
+              // remove previous
+              if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+
+              const url = `https://router.project-osrm.org/route/v1/driving/${s[0]},${s[1]};${e[0]},${e[1]}?overview=full&geometries=geojson`;
+              const res = await fetch(url);
+              if (!res.ok) throw new Error('Routing service error');
+              const data = await res.json();
+              if (!data || !data.routes || !data.routes[0]) throw new Error('No route found');
+
+              routeLayer = L.geoJSON(data.routes[0].geometry, { color: '#1976d2', weight: 4 }).addTo(map);
+              map.fitBounds(routeLayer.getBounds().pad(0.2));
+              msgEl.textContent = '';
+          } catch (err) {
+              console.error(err);
+              msgEl.innerHTML = '<span class="error">Routing failed:</span> ' + (err.message || err);
+              setTimeout(() => { if (msgEl.innerHTML.includes('Routing failed')) msgEl.textContent = ''; }, 5000);
+              throw err;
+          }
       }
 
-      throw new Error('No input provided');
-    }
+      document.getElementById('routeBtn').addEventListener('click', async () => {
+          const startQ = startInput.value || '';
+          const endQ = endInput.value || '';
+          const startDropdown = startSelect.value || '';
+          const endDropdown = endSelect.value || '';
 
-    // ---------------- Routing ----------------
-    let routeLayer = null;
+          // require either text or dropdown selection for both
+          if ((startQ.trim() === '' && startDropdown === '') || (endQ.trim() === '' && endDropdown === '')) {
+              alert('Please enter or select both start and end');
+              return;
+          }
 
-    async function drawRoute(startQ, startDropdown, endQ, endDropdown) {
-      try {
-        msgEl.textContent = 'Calculating route...';
-        const s = await geocode(startQ, startDropdown);
-        const e = await geocode(endQ, endDropdown);
+          try {
+              await drawRoute(startQ, startDropdown, endQ, endDropdown);
+          } catch (err) {
+              // error handled in drawRoute
+          }
+      });
 
-        if (!s || !e) throw new Error('Could not determine coordinates');
+      document.getElementById('clearRouteBtn').addEventListener('click', () => {
+          if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+      });
 
-        // remove previous
-        if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+      // ---------------- Nearby Attractions (exposed for popup buttons) ----------------
+      // expose a global wrapper so popup's onclick can call it (safer than inline JS on some setups)
+      window._fetchNearby = async function (lat, lon, name) {
+          try {
+              msgEl.textContent = 'Searching nearby attractions...';
+              const query = `\n[out:json][timeout:25];\n(node(around:3000,${lat},${lon})[tourism];node(around:3000,${lat},${lon})[historic];node(around:3000,${lat},${lon})[amenity~"restaurant|cafe|hotel",i];);\nout 10;`;
+              const res = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query });
+              if (!res.ok) throw new Error('Overpass API error');
+              const data = await res.json();
+              msgEl.textContent = '';
+              if (!data.elements || !data.elements.length) { alert('No nearby attractions found'); return; }
 
-        const url = `https://router.project-osrm.org/route/v1/driving/${s[0]},${s[1]};${e[0]},${e[1]}?overview=full&geometries=geojson`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Routing service error');
-        const data = await res.json();
-        if (!data || !data.routes || !data.routes[0]) throw new Error('No route found');
+              const layer = L.layerGroup();
+              data.elements.forEach(el => {
+                  if (!el.lat || !el.lon) return;
+                  const title = (el.tags && (el.tags.name || el.tags.tourism || el.tags.historic || el.tags.amenity)) || 'Attraction';
+                  L.marker([el.lat, el.lon], { icon: L.icon({ iconUrl:'https://cdn-icons-png.flaticon.com/512/684/684908.png', iconSize:[20,20] }) }).bindPopup(`<strong>${title}</strong>`).addTo(layer);
+              });
+              layer.addTo(map);
+              try { map.fitBounds(layer.getBounds().pad(0.3)); } catch(e) {}
+              setTimeout(() => map.removeLayer(layer), 35000);
+          } catch (err) {
+              console.error(err);
+              alert('Nearby attractions failed: ' + (err.message || err));
+          }
+      };
 
-        routeLayer = L.geoJSON(data.routes[0].geometry, { color: '#1976d2', weight: 4 }).addTo(map);
-        map.fitBounds(routeLayer.getBounds().pad(0.2));
-        msgEl.textContent = '';
-      } catch (err) {
-        console.error(err);
-        msgEl.innerHTML = '<span class="error">Routing failed:</span> ' + (err.message || err);
-        setTimeout(() => { if (msgEl.innerHTML.includes('Routing failed')) msgEl.textContent = ''; }, 5000);
-        throw err;
-      }
-    }
+      // ---------------- Audio Playback ----------------
+      /**
+       * Plays the audio file for a given monastery index.
+       *
+       * @param {string|number} input Monastery index string from select dropdowns or marker buttons.
+       */
+      window._playAudio = function(input) {
+          let monasteryName = '';
+          let fileName = '';
 
-    document.getElementById('routeBtn').addEventListener('click', async () => {
-      const startQ = startInput.value || '';
-      const endQ = endInput.value || '';
-      const startDropdown = startSelect.value || '';
-      const endDropdown = endSelect.value || '';
+          const idx = parseInt(input);
 
-      // require either text or dropdown selection for both
-      if ((startQ.trim() === '' && startDropdown === '') || (endQ.trim() === '' && endDropdown === '')) {
-        alert('Please enter or select both start and end');
-        return;
-      }
+          if (isNaN(idx) || idx < 0 || idx >= monasteries.features.length) {
+              console.error('Invalid index provided for _playAudio:', input);
+              msgEl.innerHTML = '<span class="error">Audio Error:</span> Invalid monastery selection.';
+              setTimeout(() => { if (msgEl.innerHTML.includes('Audio Error:')) msgEl.textContent = ''; }, 4000);
+              return;
+          }
 
-      try {
-        await drawRoute(startQ, startDropdown, endQ, endDropdown);
-      } catch (err) {
-        // error handled in drawRoute
-      }
-    });
+          const p = monasteries.features[idx].properties;
+          monasteryName = p.name;
 
-    document.getElementById('clearRouteBtn').addEventListener('click', () => {
-      if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
-    });
+          // Use the dedicated filename property
+          fileName = p.filename || monasteryName.toLowerCase().replace(/[^a-z0-9]+/g,'_');
 
-    // ---------------- Nearby Attractions (exposed for popup buttons) ----------------
-    // expose a global wrapper so popup's onclick can call it (safer than inline JS on some setups)
-    window._fetchNearby = async function (lat, lon, name) {
-      try {
-        msgEl.textContent = 'Searching nearby attractions...';
-        const query = `\n[out:json][timeout:25];\n(node(around:3000,${lat},${lon})[tourism];node(around:3000,${lat},${lon})[historic];node(around:3000,${lat},${lon})[amenity~"restaurant|cafe|hotel",i];);\nout 10;`;
-        const res = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query });
-        if (!res.ok) throw new Error('Overpass API error');
-        const data = await res.json();
-        msgEl.textContent = '';
-        if (!data.elements || !data.elements.length) { alert('No nearby attractions found'); return; }
+          const audioPath = `audio/${fileName}.mp3`;
+          const audio = new Audio(audioPath);
 
-        const layer = L.layerGroup();
-        data.elements.forEach(el => {
-          if (!el.lat || !el.lon) return;
-          const title = (el.tags && (el.tags.name || el.tags.tourism || el.tags.historic || el.tags.amenity)) || 'Attraction';
-          L.marker([el.lat, el.lon], { icon: L.icon({ iconUrl:'https://cdn-icons-png.flaticon.com/512/684/684908.png', iconSize:[20,20] }) }).bindPopup(`<strong>${title}</strong>`).addTo(layer);
-        });
-        layer.addTo(map);
-        try { map.fitBounds(layer.getBounds().pad(0.3)); } catch(e) {}
-        setTimeout(() => map.removeLayer(layer), 35000);
-      } catch (err) {
-        console.error(err);
-        alert('Nearby attractions failed: ' + (err.message || err));
-      }
-    };
-    // ---------------- Audio Playback ----------------
-window._playAudio = function(monasteryName) {
-  // convert monastery name to file-friendly format
-  const fileName = monasteryName.toLowerCase().replace(/[^a-z0-9]+/g,'_') + '.mp3';
-  const audioPath = `audio/${fileName}`;
-  const audio = new Audio(audioPath);
-  audio.play().catch(err => {
-    console.error('Audio playback failed:', err);
-    alert('Audio file not found for ' + monasteryName);
-  });
-};
+          // Display an alert that audio is attempting to play
+          alert(`Playing audio for: ${monasteryName}`); 
 
-
-
+          audio.play().catch(err => {
+              console.error('Audio playback failed:', err);
+              msgEl.innerHTML = `<span class="error">Audio Error:</span> File **${audioPath}** not found for **${monasteryName}**. Check your 'audio' folder and file names.`;
+              setTimeout(() => { if (msgEl.innerHTML.includes('Audio Error:')) msgEl.textContent = ''; }, 6000);
+          });
+      };
   })();
 
-  //playaudio button
+  //playaudio button in controls panel
   document.getElementById('playSelectedAudioBtn').addEventListener('click', () => {
-  const selectedIdx = startSelect.value || endSelect.value;
-  if (selectedIdx === '' || selectedIdx === 'my_location') {
-    alert('Please select a monastery first');
-    return;
-  }
+      // Prefer startSelect, fall back to endSelect
+      const selectedValue = document.getElementById('startSelect').value || document.getElementById('endSelect').value; 
 
-  const monastery = monasteries.features[parseInt(selectedIdx)].properties.name;
-  window._playAudio(monastery);
-});
+      if (selectedValue === '' || selectedValue === 'my_location') {
+          alert('Please select a monastery first from the Start or End dropdown.');
+          return;
+      }
 
-  </script>
+      // The selected value is the index of the monastery in the array (e.g., "6")
+      window._playAudio(selectedValue); 
+  });
+</script>
 </body>
 </html>
