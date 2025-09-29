@@ -45,6 +45,7 @@
 
     <button id="routeBtn">Draw Route</button>
     <button id="clearRouteBtn">Clear Route</button>
+    <button id="playSelectedAudioBtn">🔊 Play Selected Audio</button>
 
     <div class="small">Tip: type part of a monastery name in the Start/End input — the dropdown below will filter to matching monasteries.</div>
     <div class="small">Run locally with: <code>python -m http.server</code></div>
@@ -112,9 +113,16 @@
           <small>${p.region}</small>
           <img src="${p.img || 'https://source.unsplash.com/400x300/?monastery'}" style="width:100%;margin-top:6px;border-radius:6px"/>
           <p style="font-size:13px;margin:6px 0">${p.desc}</p>
-          <button onclick="window._fetchNearby && window._fetchNearby(${lat},${lon},'${p.name.replace(/'/g,"\'")}')">Nearby Attractions</button>
+          <button onclick="window._playAudio && window._playAudio('${p.name.replace(/'/g,"\\'")}')">🔊 Play Audio</button>
+          <button onclick="window._fetchNearby && window._fetchNearby(${lat},${lon},'${p.name.replace(/'/g,"\\'")}')">Nearby Attractions</button>
         </div>`;
+
       const m = L.marker([lat, lon]).bindPopup(popup);
+      m.on('popupopen', () => {
+        // play audio automatically
+        window._playAudio(p.name);
+      });
+
       markers.addLayer(m);
 
       // select options (value is index)
@@ -307,8 +315,34 @@
         alert('Nearby attractions failed: ' + (err.message || err));
       }
     };
+    // ---------------- Audio Playback ----------------
+window._playAudio = function(monasteryName) {
+  // convert monastery name to file-friendly format
+  const fileName = monasteryName.toLowerCase().replace(/[^a-z0-9]+/g,'_') + '.mp3';
+  const audioPath = `audio/${fileName}`;
+  const audio = new Audio(audioPath);
+  audio.play().catch(err => {
+    console.error('Audio playback failed:', err);
+    alert('Audio file not found for ' + monasteryName);
+  });
+};
+
+
 
   })();
+
+  //playaudio button
+  document.getElementById('playSelectedAudioBtn').addEventListener('click', () => {
+  const selectedIdx = startSelect.value || endSelect.value;
+  if (selectedIdx === '' || selectedIdx === 'my_location') {
+    alert('Please select a monastery first');
+    return;
+  }
+
+  const monastery = monasteries.features[parseInt(selectedIdx)].properties.name;
+  window._playAudio(monastery);
+});
+
   </script>
 </body>
 </html>
