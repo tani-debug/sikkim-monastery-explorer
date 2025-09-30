@@ -52,18 +52,7 @@
     <div id="msg" class="small"></div>
   </div>
   <!-- Audio player for testing -->
-    <audio controls>
-      <source src="audio/tholung_monastery.mp3" type="audio/mpeg">
-      <source src="dubdi_monastery.mp3" type="audio/mpeg">
-      <source src="enchey_monastery.mp3" type="audio/mpeg">
-      <source src="lingdum_monastery.mp3" type="audio/mpeg">
-      <source src="pemayangtse_monastery.mp3" type="audio/mpeg">
-      <source src="phodong_monastery.mp3" type="audio/mpeg">
-      <source src="ralang_monastery.mp3" type="audio/mpeg">
-      <source src="rumtek_monastery.mp3" type="audio/mpeg">
-      <source src="sanga_choeling_monastery.mp3" type="audio/mpeg">
-      <source src="tashiding_monastery.mp3" type="audio/mpeg">
-    </audio>
+   <audio id="audioPlayer" controls></audio>
 
   <!-- Leaflet & MarkerCluster JS (loaded from CDN) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -329,6 +318,33 @@
               setTimeout(() => { if (msgEl.innerHTML.includes('Audio Error:')) msgEl.textContent = ''; }, 6000);
           });
       };
+
+    const tracks = [
+        "audio/tholung_monastery.mp3",
+        "audio/dubdi_monastery.mp3",
+        "audio/enchey_monastery.mp3",
+        "audio/lingdum_monastery.mp3",
+        "audio/pemayangtse_monastery.mp3",
+        "audio/phodong_monastery.mp3",
+        "audio/ralang_monastery.mp3",
+        "audio/rumtek_monastery.mp3",
+        "audio/sanga_choeling_monastery.mp3",
+        "audio/tashiding_monastery.mp3"
+    ];
+
+    let currentTrack = 0;
+
+    // Load the first monastery audio
+    audioPlayer.src = tracks[currentTrack];
+
+    // When one track finishes, move to the next
+    audioPlayer.addEventListener("ended", () => {
+      currentTrack++;
+      if (currentTrack < tracks.length) {
+        audioPlayer.src = tracks[currentTrack];
+        audioPlayer.play();
+      }
+    });
 
       document.getElementById('playSelectedAudioBtn').addEventListener('click', () => {
           const selectedValue = document.getElementById('startSelect').value || document.getElementById('endSelect').value; 
